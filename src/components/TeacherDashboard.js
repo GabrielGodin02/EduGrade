@@ -8,7 +8,7 @@ import StudentList from './StudentList';
 import GradeManagement from './GradeManagement';
 import AssignSubject from './AssignSubject';
 import RemoveSubject from './RemoveSubject';
-import { supabase } from '../hooks/useLocalStorage'; // ✅ IMPORTA SUPABASE CLIENT
+import { supabase } from '../supabaseClient'; // ✅ IMPORTA SUPABASE CLIENT
 
 const TeacherDashboard = () => {
     const { user } = useAuth(); // `user` ahora proviene directamente de Supabase Auth via AuthContext

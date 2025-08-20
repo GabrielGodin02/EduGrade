@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 // import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
 import { BookOpen, Save } from 'lucide-react';
 import { calculateAverage, calculateFinalGrade, getGradeStatus } from '../utils/gradeCalculations';
-import { supabase } from '../hooks/useLocalStorage'; // ✅ IMPORTA SUPABASE CLIENT
+import { supabase } from '../supabaseClient'; // ✅ IMPORTA SUPABASE CLIENT
 
 // Modificamos el componente para que no reciba 'students' como prop,
 // sino que los cargue internamente desde Supabase.

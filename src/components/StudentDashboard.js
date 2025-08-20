@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 // import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
 import { BookOpen, BarChart3, Award, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 import { calculateAverage, calculateFinalGrade, getGradeStatus } from '../utils/gradeCalculations';
-import { supabase } from '../hooks/useLocalStorage'; // ✅ IMPORTA SUPABASE CLIENT
+import { supabase } from '../supabaseClient'; // ✅ IMPORTA SUPABASE CLIENT
 
 const StudentDashboard = () => {
     const { user } = useAuth();

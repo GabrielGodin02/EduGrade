@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'; // ✅ Import useEffect
 import { motion } from 'framer-motion';
 // import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
 import { Book, User, PlusCircle, Save } from 'lucide-react';
-import { supabase } from '../hooks/useLocalStorage'; // ✅ IMPORTA SUPABASE CLIENT
+import { supabase } from '../supabaseClient';// ✅ IMPORTA SUPABASE CLIENT
 
 // Modificamos el prop 'students' para que ya no sea necesario pasarlo desde el padre
 // y que el componente se encargue de cargar sus propios estudiantes.

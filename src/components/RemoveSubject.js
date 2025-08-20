@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 // import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
 import { Book, User, Trash2, AlertTriangle } from 'lucide-react';
-import { supabase } from '../hooks/useLocalStorage';// ✅ Importa tu cliente Supabase
+import { supabase } from '../supabaseClient';// ✅ Importa tu cliente Supabase
 import { useAuth } from '../context/AuthContext'; // ✅ Para obtener el ID del profesor loggeado
 
 const RemoveSubject = ({ students = [], onSubjectRemoved }) => {
