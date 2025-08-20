@@ -1,15 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // ✅ Import useEffect
 import { motion } from 'framer-motion';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+// import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
 import { Book, User, PlusCircle, Save } from 'lucide-react';
+import { supabase } from '../hooks/useLocalStorage'; // ✅ IMPORTA SUPABASE CLIENT
 
-const AssignSubject = ({ students = [], onSubjectAssigned }) => {
-    const [allStudents, setAllStudents] = useLocalStorage('edugrade_students', []);
+// Modificamos el prop 'students' para que ya no sea necesario pasarlo desde el padre
+// y que el componente se encargue de cargar sus propios estudiantes.
+const AssignSubject = ({ onSubjectAssigned }) => {
+    const [students, setStudents] = useState([]); // ✅ Nuevo estado para almacenar los estudiantes de Supabase
     const [selectedStudentId, setSelectedStudentId] = useState('');
     const [newSubjectName, setNewSubjectName] = useState('');
     const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [fetchingStudents, setFetchingStudents] = useState(true); // ✅ Nuevo estado para la carga de estudiantes
+
+    // Función para obtener la lista de estudiantes desde Supabase
+    const fetchStudents = async () => {
+        setFetchingStudents(true);
+        const { data, error } = await supabase
+            .from('students')
+            .select('id, full_name, subjects'); // ✅ Seleccionamos el ID, nombre completo y las materias
+
+        if (error) {
+            console.error('Error fetching students:', error.message);
+            setError('Error al cargar la lista de estudiantes.');
+            setStudents([]);
+        } else {
+            setStudents(data);
+            setError('');
+        }
+        setFetchingStudents(false);
+    };
+
+    // ✅ useEffect para cargar los estudiantes cuando el componente se monta
+    useEffect(() => {
+        fetchStudents();
+    }, []); // El array vacío asegura que se ejecute solo una vez al montar
 
     const handleStudentSelect = (e) => {
         setSelectedStudentId(e.target.value);
@@ -24,7 +51,7 @@ const AssignSubject = ({ students = [], onSubjectAssigned }) => {
         setSuccess('');
     };
 
-    const handleAssignSubject = (e) => {
+    const handleAssignSubject = async (e) => { // ✅ Hacemos la función asíncrona
         e.preventDefault();
         setError('');
         setSuccess('');
@@ -36,57 +63,68 @@ const AssignSubject = ({ students = [], onSubjectAssigned }) => {
             return;
         }
 
-        const studentToUpdate = allStudents.find(s => s.id === selectedStudentId);
+        const studentToUpdate = students.find(s => s.id === selectedStudentId);
 
         if (!studentToUpdate) {
-            setError('Estudiante no encontrado.');
+            setError('Estudiante no encontrado. Intenta recargar la página.');
             setLoading(false);
             return;
         }
 
+        // Asegúrate de que `subjects` es un array, incluso si es null o undefined
+        const currentSubjects = studentToUpdate.subjects || [];
+
         // Check if subject already exists for this student
-        if (studentToUpdate.subjects.some(sub => sub.name === newSubjectName.trim())) {
+        if (currentSubjects.some(sub => sub.name === newSubjectName.trim())) {
             setError(`La materia "${newSubjectName.trim()}" ya está asignada a este estudiante.`);
             setLoading(false);
             return;
         }
 
-        // Simulate network delay
-        setTimeout(() => {
-            const updatedStudents = allStudents.map(student => {
-                if (student.id === selectedStudentId) {
-                    const newSubject = {
-                        name: newSubjectName.trim(),
-                        years: {
-                            [new Date().getFullYear()]: { // Current year by default
-                                'Periodo 1': { tasks: ['', '', '', ''], exams: ['', '', ''], presentations: ['', '', ''] },
-                                'Periodo 2': { tasks: ['', '', '', ''], exams: ['', '', ''], presentations: ['', '', ''] },
-                                'Periodo 3': { tasks: ['', '', '', ''], exams: ['', '', ''], presentations: ['', '', ''] }
-                            }
-                        }
-                    };
-                    return {
-                        ...student,
-                        subjects: [...student.subjects, newSubject]
-                    };
+        // Crear la nueva materia con la estructura predeterminada de años y períodos
+        const newSubject = {
+            name: newSubjectName.trim(),
+            years: {
+                [new Date().getFullYear()]: { // Current year by default
+                    'Periodo 1': { tasks: ['', '', '', ''], exams: ['', '', ''], presentations: ['', '', ''] },
+                    'Periodo 2': { tasks: ['', '', '', ''], exams: ['', '', ''], presentations: ['', '', ''] },
+                    'Periodo 3': { tasks: ['', '', '', ''], exams: ['', '', ''], presentations: ['', '', ''] }
                 }
-                return student;
-            });
-
-            setAllStudents(updatedStudents); // Update localStorage
-            setSuccess(`Materia "${newSubjectName.trim()}" asignada exitosamente a ${studentToUpdate.name}.`);
-            setSelectedStudentId('');
-            setNewSubjectName('');
-            setLoading(false);
-
-            if (onSubjectAssigned) {
-                onSubjectAssigned(); // Refresh student list in parent
             }
-        }, 500); // Simulate network delay
+        };
+
+        const updatedSubjects = [...currentSubjects, newSubject];
+
+        try {
+            // Actualizar el registro del estudiante en Supabase
+            const { error: updateError } = await supabase
+                .from('students')
+                .update({ subjects: updatedSubjects }) // ✅ Actualizamos la columna `subjects` (JSONB)
+                .eq('id', selectedStudentId); // ✅ Filtramos por el ID del estudiante
+
+            if (updateError) {
+                console.error('Error assigning subject:', updateError.message);
+                setError(`Error al asignar la materia: ${updateError.message}`);
+            } else {
+                setSuccess(`Materia "${newSubjectName.trim()}" asignada exitosamente a ${studentToUpdate.full_name}.`);
+                setSelectedStudentId('');
+                setNewSubjectName('');
+                // Volver a cargar la lista de estudiantes para reflejar el cambio en la UI
+                await fetchStudents();
+                if (onSubjectAssigned) {
+                    onSubjectAssigned(); // Call parent callback if provided
+                }
+            }
+        } catch (err) {
+            console.error('Unexpected error during subject assignment:', err.message);
+            setError('Ocurrió un error inesperado al asignar la materia.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <motion.div 
+        <motion.div
             className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-3xl p-8 shadow-xl"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -107,18 +145,30 @@ const AssignSubject = ({ students = [], onSubjectAssigned }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Seleccionar Estudiante
                     </label>
-                    <select
-                        value={selectedStudentId}
-                        onChange={handleStudentSelect}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-300"
-                    >
-                        <option value="">Selecciona un estudiante...</option>
-                        {students.map(student => (
-                            <option key={student.id} value={student.id}>
-                                {student.name}
-                            </option>
-                        ))}
-                    </select>
+                    {fetchingStudents ? (
+                        <div className="flex items-center gap-2 text-gray-600">
+                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            Cargando estudiantes...
+                        </div>
+                    ) : (
+                        <select
+                            value={selectedStudentId}
+                            onChange={handleStudentSelect}
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-300"
+                            disabled={loading || fetchingStudents}
+                        >
+                            <option value="">Selecciona un estudiante...</option>
+                            {students.length > 0 ? (
+                                students.map(student => (
+                                    <option key={student.id} value={student.id}>
+                                        {student.full_name}
+                                    </option>
+                                ))
+                            ) : (
+                                <option value="" disabled>No hay estudiantes disponibles</option>
+                            )}
+                        </select>
+                    )}
                 </div>
 
                 <div>
@@ -131,12 +181,12 @@ const AssignSubject = ({ students = [], onSubjectAssigned }) => {
                         onChange={handleSubjectNameChange}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-300"
                         placeholder="Ej: Historia, Química"
-                        disabled={!selectedStudentId}
+                        disabled={!selectedStudentId || loading || fetchingStudents}
                     />
                 </div>
 
                 {error && (
-                    <motion.div 
+                    <motion.div
                         className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -146,7 +196,7 @@ const AssignSubject = ({ students = [], onSubjectAssigned }) => {
                 )}
 
                 {success && (
-                    <motion.div 
+                    <motion.div
                         className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-600"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -160,7 +210,7 @@ const AssignSubject = ({ students = [], onSubjectAssigned }) => {
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 w-full"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    disabled={loading || !selectedStudentId || !newSubjectName.trim()}
+                    disabled={loading || !selectedStudentId || !newSubjectName.trim() || fetchingStudents}
                 >
                     {loading ? (
                         <div className="flex items-center justify-center">

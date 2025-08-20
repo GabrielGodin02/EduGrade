@@ -1,26 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { useLocalStorage } from '../hooks/useLocalStorage'; // Import useLocalStorage
-import { Users, UserPlus, BookOpen, BarChart3, PlusCircle, Trash2 } from 'lucide-react'; // Added Trash2
+// import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
+import { Users, UserPlus, BookOpen, BarChart3, PlusCircle, Trash2 } from 'lucide-react';
 import StudentRegistration from './StudentRegistration';
 import StudentList from './StudentList';
 import GradeManagement from './GradeManagement';
-import AssignSubject from './AssignSubject'; // New component
-import RemoveSubject from './RemoveSubject'; // New component
+import AssignSubject from './AssignSubject';
+import RemoveSubject from './RemoveSubject';
+import { supabase } from '../hooks/useLocalStorage'; // ✅ IMPORTA SUPABASE CLIENT
 
 const TeacherDashboard = () => {
-    const { user } = useAuth();
-    const [allStudents, setAllStudents] = useLocalStorage('edugrade_students', []); // Use useLocalStorage
+    const { user } = useAuth(); // `user` ahora proviene directamente de Supabase Auth via AuthContext
+    const [myStudents, setMyStudents] = useState([]); // ✅ Cambiado de useLocalStorage a useState
+    const [loadingStudents, setLoadingStudents] = useState(true); // ✅ Nuevo estado para la carga de estudiantes
     const [activeTab, setActiveTab] = useState('overview');
 
-    // Filter students belonging to this teacher (simulated)
-    const myStudents = allStudents.filter(student => student.teacherId === user.id);
+    // Función asíncrona para cargar estudiantes desde Supabase
+    const fetchStudents = async () => {
+        if (!user || !user.id) { // Asegúrate de que el usuario esté logueado y tenga un ID
+            setMyStudents([]);
+            setLoadingStudents(false);
+            return;
+        }
 
-    // Function to refresh student list after registration/assignment/removal
+        setLoadingStudents(true);
+        try {
+            const { data, error } = await supabase
+                .from('students') // ✅ Tu tabla de estudiantes en Supabase
+                .select('*') // Selecciona todas las columnas
+                .eq('teacher_id', user.id); // ✅ Filtra por el ID del profesor logueado
+
+            if (error) {
+                console.error("Error fetching students from Supabase:", error.message);
+                setMyStudents([]);
+            } else {
+                setMyStudents(data);
+            }
+        } catch (err) {
+            console.error("Unexpected error fetching students:", err.message);
+            setMyStudents([]);
+        } finally {
+            setLoadingStudents(false);
+        }
+    };
+
+    // ✅ useEffect para cargar estudiantes cuando el componente se monta o el usuario cambia
+    useEffect(() => {
+        fetchStudents();
+    }, [user]); // Vuelve a cargar si el objeto `user` en el AuthContext cambia
+
+    // Función para refrescar la lista de estudiantes
+    // Ahora simplemente llama a fetchStudents para recargar desde Supabase
     const refreshStudents = () => {
-        // In localStorage version, simply re-fetch from localStorage
-        setAllStudents(JSON.parse(localStorage.getItem('edugrade_students') || '[]'));
+        fetchStudents();
     };
 
     const tabs = [
@@ -28,20 +61,36 @@ const TeacherDashboard = () => {
         { id: 'students', label: 'Estudiantes', icon: Users },
         { id: 'register', label: 'Registrar', icon: UserPlus },
         { id: 'assignSubject', label: 'Asignar Materia', icon: PlusCircle },
-        { id: 'removeSubject', label: 'Eliminar Materia', icon: Trash2 }, // New tab
+        { id: 'removeSubject', label: 'Eliminar Materia', icon: Trash2 },
         { id: 'grades', label: 'Calificaciones', icon: BookOpen }
     ];
 
     const renderTabContent = () => {
+        // Muestra un indicador de carga mientras se cargan los estudiantes
+        if (loadingStudents) {
+            return (
+                <motion.div
+                    className="flex items-center justify-center h-48 bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-3xl shadow-xl"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                >
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="ml-4 text-gray-700">Cargando estudiantes...</p>
+                </motion.div>
+            );
+        }
+
         switch (activeTab) {
             case 'overview':
                 return (
-                    <motion.div 
+                    <motion.div
                         className="grid grid-cols-1 md:grid-cols-3 gap-6"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
                     >
+                        {/* Tarjeta de Estudiantes Registrados */}
                         <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 shadow-lg">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-blue-100 rounded-xl">
@@ -54,6 +103,7 @@ const TeacherDashboard = () => {
                             </div>
                         </div>
 
+                        {/* Tarjeta de Materia Principal (puede que necesite lógica más avanzada) */}
                         <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 shadow-lg">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-green-100 rounded-xl">
@@ -66,6 +116,7 @@ const TeacherDashboard = () => {
                             </div>
                         </div>
 
+                        {/* Tarjeta de Estudiantes con Calificaciones (ejemplo) */}
                         <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 shadow-lg">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-purple-100 rounded-xl">
@@ -73,8 +124,8 @@ const TeacherDashboard = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-bold text-gray-900">
-                                        {/* This would require iterating through all student subjects and grades */}
-                                        0
+                                        {/* Lógica para contar estudiantes con calificaciones */}
+                                        {myStudents.filter(student => student.subjects && student.subjects.some(sub => Object.values(sub.years || {}).some(year => Object.values(year).some(period => Object.values(period).flat().some(grade => grade !== ''))))).length}
                                     </h3>
                                     <p className="text-gray-600">Con Calificaciones</p>
                                 </div>
@@ -87,19 +138,41 @@ const TeacherDashboard = () => {
             case 'register':
                 return <StudentRegistration onStudentAdded={refreshStudents} />;
             case 'assignSubject':
+                // Asegúrate de pasar `myStudents` actualizado
                 return <AssignSubject students={myStudents} onSubjectAssigned={refreshStudents} />;
             case 'removeSubject':
-                return <RemoveSubject students={myStudents} onSubjectRemoved={refreshStudents} />; // New component
+                // Asegúrate de pasar `myStudents` actualizado
+                return <RemoveSubject students={myStudents} onSubjectRemoved={refreshStudents} />;
             case 'grades':
-                return <GradeManagement students={myStudents} />;
+                // Asegúrate de pasar `myStudents` actualizado
+                return <GradeManagement students={myStudents} onGradeUpdated={refreshStudents} />; // Considerar onGradeUpdated para refrescar si se modifican las calificaciones
             default:
                 return null;
         }
     };
 
+    // Asegúrate de que `user` esté disponible antes de intentar usarlo
+    if (!user) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-100">
+                <p className="text-gray-700">Cargando perfil de usuario...</p>
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin ml-4"></div>
+            </div>
+        );
+    }
+
+    // Renderiza el dashboard solo si el usuario está disponible y es un profesor
+    if (user.role !== 'teacher') {
+        return (
+            <div className="flex items-center justify-center h-screen bg-red-100">
+                <p className="text-red-700 font-semibold">Acceso Denegado: Solo profesores pueden acceder a este panel.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8">
-            <motion.div 
+            <motion.div
                 className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-3xl p-8 shadow-xl"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -108,13 +181,13 @@ const TeacherDashboard = () => {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                            Bienvenido, {user.name}
-                        </h1>
+                            Bienvenido, {user.user_metadata?.full_name || user.email}
+                        </h1> {/* ✅ Ajuste para obtener el nombre del usuario de Supabase Auth */}
                         <p className="text-gray-600 text-lg">
                             Panel de Control
                         </p>
                     </div>
-                    
+
                     <div className="flex bg-gray-100 rounded-2xl p-1 gap-1">
                         {tabs.map((tab, index) => {
                             const Icon = tab.icon;

@@ -1,25 +1,7 @@
-import { useState, useEffect } from 'react';
+// src/supabaseClient.js
+import { createClient } from '@supabase/supabase-js';
 
-export const useLocalStorage = (key, initialValue) => {
-    const [storedValue, setStoredValue] = useState(() => {
-        try {
-            const item = window.localStorage.getItem(key);
-            return item ? JSON.parse(item) : initialValue;
-        } catch (error) {
-            console.error(`Error reading localStorage key "${key}":`, error);
-            return initialValue;
-        }
-    });
+const supabaseUrl = 'https://iltkzdkfkjcgvinjcdes.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdGt6ZGtma2pjZ3ZpbmpjZGVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4NDk4MjYsImV4cCI6MjA2OTQyNTgyNn0._Y-rH_drNCkypgvfytmRNm5qt4hHREP4rl26A6r3k-8';
 
-    const setValue = (value) => {
-        try {
-            const valueToStore = value instanceof Function ? value(storedValue) : value;
-            setStoredValue(valueToStore);
-            window.localStorage.setItem(key, JSON.stringify(valueToStore));
-        } catch (error) {
-            console.error(`Error setting localStorage key "${key}":`, error);
-        }
-    };
-
-    return [storedValue, setValue];
-};
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

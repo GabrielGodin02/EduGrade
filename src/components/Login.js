@@ -1,23 +1,23 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '../context/AuthContext';
-import { useLocalStorage } from '../hooks/useLocalStorage'; // Import useLocalStorage
+import { useAuth } from '../context/AuthContext'; // Asumimos que useAuth ya maneja Supabase Auth
+// import { useLocalStorage } from '../hooks/useLocalStorage'; // ❌ ELIMINA ESTA LÍNEA
 import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
-    const { login, registerTeacher } = useAuth();
-    const [teachers] = useLocalStorage('edugrade_teachers', []); // Use useLocalStorage
-    const [students] = useLocalStorage('edugrade_students', []); // Use useLocalStorage
+    const { login, registerTeacher } = useAuth(); // Asumimos que estos métodos interactúan con Supabase Auth
+    // const [teachers] = useLocalStorage('edugrade_teachers', []); // ❌ ELIMINA ESTA LÍNEA
+    // const [students] = useLocalStorage('edugrade_students', []); // ❌ ELIMINA ESTA LÍNEA
     const [isLogin, setIsLogin] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         email: '',
         password: '',
-        name: ''
+        name: '' // Solo necesario para el registro
     });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [loading, setLoading] = useState(false); // Keep loading state for UI feedback
+    const [loading, setLoading] = useState(false);
 
     const handleInputChange = (e) => {
         setFormData({
@@ -28,96 +28,80 @@ const Login = () => {
         setSuccess('');
     };
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => { // ✅ Hacemos la función asíncrona
         e.preventDefault();
         setError('');
         setSuccess('');
         setLoading(true);
 
-        // Simulate network delay
-        setTimeout(() => {
-            // Buscar en profesores
-            const teacher = teachers.find(t => 
-                t.email === formData.email && t.password === formData.password
-            );
+        const { email, password } = formData;
 
-            if (teacher) {
-                login({
-                    id: teacher.id,
-                    name: teacher.name,
-                    email: teacher.email,
-                    role: 'teacher'
-                });
-                setLoading(false);
-                return;
+        try {
+            // Asumimos que `login` de useAuth ahora llama a `supabase.auth.signInWithPassword`
+            // Este método de `useAuth` debería manejar la lógica de autenticación
+            // y la asignación del rol una vez autenticado (profesor o estudiante).
+            // No necesitamos buscar manualmente en `teachers` o `students` aquí.
+            await login(email, password); // ✅ Llamamos al método `login` de useAuth
+            setSuccess('Inicio de sesión exitoso!'); // Esto podría ser manejado por el AuthContext
+        } catch (err) {
+            console.error('Error al iniciar sesión:', err.message);
+            // Mostrar un error más amigable al usuario
+            if (err.message.includes('Invalid login credentials')) {
+                setError('Credenciales incorrectas. Verifica tu email y contraseña.');
+            } else {
+                setError(`Error al iniciar sesión: ${err.message}`);
             }
-
-            // Buscar en estudiantes
-            const student = students.find(s => 
-                s.username === formData.email && s.password === formData.password
-            );
-
-            if (student) {
-                login({
-                    id: student.id,
-                    name: student.name,
-                    username: student.username,
-                    role: 'student',
-                    teacherId: student.teacherId // Keep teacherId for student context
-                });
-                setLoading(false);
-                return;
-            }
-
-            setError('Credenciales incorrectas');
+        } finally {
             setLoading(false);
-        }, 500); // Simulate network delay
+        }
     };
 
-    const handleRegister = (e) => {
+    const handleRegister = async (e) => { // ✅ Hacemos la función asíncrona
         e.preventDefault();
         setError('');
         setSuccess('');
         setLoading(true);
 
-        if (!formData.name || !formData.email || !formData.password) {
-            setError('Todos los campos son obligatorios');
+        const { name, email, password } = formData;
+
+        if (!name || !email || !password) {
+            setError('Todos los campos son obligatorios.');
             setLoading(false);
             return;
         }
 
-        // Simulate network delay
-        setTimeout(() => {
-            // Verificar si el email ya existe
-            const existingTeacher = teachers.find(t => t.email === formData.email);
-            if (existingTeacher) {
-                setError('Este email ya está registrado');
-                setLoading(false);
-                return;
-            }
-
-            const newTeacher = registerTeacher(formData.name, formData.email, formData.password);
-            if (newTeacher) {
-                setSuccess('¡Registro exitoso! Ahora puedes iniciar sesión.');
-                setFormData({ email: '', password: '', name: '' });
-                setIsLogin(true); // Redirect to login form
+        try {
+            // Asumimos que `registerTeacher` de useAuth llama a `supabase.auth.signUp`
+            // y luego inserta el perfil del profesor en la tabla `teachers`.
+            await registerTeacher(name, email, password); // ✅ Llamamos al método `registerTeacher` de useAuth
+            setSuccess('¡Registro exitoso! Ahora puedes iniciar sesión con tu email y contraseña.');
+            setFormData({ email: '', password: '', name: '' }); // Limpiamos el formulario
+            setIsLogin(true); // Redirigir a la forma de inicio de sesión
+        } catch (err) {
+            console.error('Error al registrar profesor:', err.message);
+            // Adaptar los mensajes de error de Supabase para el usuario
+            if (err.message.includes('User already registered')) {
+                setError('Este email ya está registrado. Por favor, inicia sesión.');
+            } else if (err.message.includes('Password should be at least 6 characters')) {
+                setError('La contraseña debe tener al menos 6 caracteres.');
             } else {
-                setError('Error al registrar profesor. Inténtalo de nuevo.');
+                setError(`Error al registrar: ${err.message}`);
             }
+        } finally {
             setLoading(false);
-        }, 500); // Simulate network delay
+        }
     };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-            <motion.div 
+            <motion.div
                 className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-3xl p-8 w-full max-w-md shadow-2xl"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
             >
                 <div className="text-center mb-8">
-                    <motion.div 
+                    <motion.div
                         className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4"
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
@@ -156,15 +140,15 @@ const Login = () => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {isLogin ? 'Email o Usuario' : 'Email'}
+                            Email
                         </label>
                         <input
-                            type={isLogin ? "text" : "email"}
+                            type="email" // Siempre de tipo email para Supabase Auth
                             name="email"
                             value={formData.email}
                             onChange={handleInputChange}
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-300"
-                            placeholder={isLogin ? "Email o usuario" : "tu@email.com"}
+                            placeholder="tu@email.com"
                         />
                     </div>
 
@@ -192,7 +176,7 @@ const Login = () => {
                     </div>
 
                     {error && (
-                        <motion.div 
+                        <motion.div
                             className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -202,7 +186,7 @@ const Login = () => {
                     )}
 
                     {success && (
-                        <motion.div 
+                        <motion.div
                             className="p-3 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
